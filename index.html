@@ -361,6 +361,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
       <button class="tab" data-tab="detail" onclick="switchTab('detail')">Detail Harian</button>
+      <button class="tab" data-tab="rincian" onclick="switchTab('rincian')">Rincian Harian</button>
       <button class="tab" data-tab="manage" onclick="switchTab('manage')">Kelola Bulan</button>
     </div>
 
@@ -469,6 +470,56 @@
             <tbody id="rincianBody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+
+    <!-- RINCIAN HARIAN TAB -->
+    <div id="tab-rincian" style="display:none">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select id="rincianMonth" onchange="renderRincianTab()"></select>
+          <select id="rincianDate" onchange="renderRincianTab()">
+            <option value="all">Semua Tanggal</option>
+          </select>
+          <input type="search" id="searchRincian" placeholder="Cari toko, faktur, sales..." oninput="renderRincianTab()" style="min-width:180px" />
+        </div>
+        <div class="toolbar-right">
+          <select id="rincianSection" onchange="renderRincianTab()">
+            <option value="all">Semua Section</option>
+            <option value="PIUTANG">Piutang Tempo</option>
+            <option value="DROPPING">Cash Dropping</option>
+          </select>
+          <select id="rincianKet" onchange="renderRincianTab()">
+            <option value="all">Semua Status</option>
+            <option value="LUNAS">Lunas</option>
+            <option value="TITIP">Titip</option>
+            <option value="TF">Transfer/BG</option>
+          </select>
+        </div>
+      </div>
+      <div id="rincianSummary" class="cards" style="margin-bottom:14px"></div>
+      <div class="table-wrap" style="max-height:560px">
+        <table>
+          <thead>
+            <tr>
+              <th class="center">No</th>
+              <th class="text-left">Tgl</th>
+              <th class="text-left">Sales</th>
+              <th class="text-left">No Faktur</th>
+              <th class="text-left">Nama Toko</th>
+              <th class="text-left">Alamat</th>
+              <th>Tagihan</th>
+              <th>Minyak Cash</th>
+              <th>Minyak TF</th>
+              <th>Rupa Cash</th>
+              <th>Rupa TF</th>
+              <th class="text-left">Ket</th>
+              <th class="text-left">Section</th>
+            </tr>
+          </thead>
+          <tbody id="rincianTabBody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -608,11 +659,13 @@
     // ===================== TABS =====================
     function switchTab(name) {
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-      ['dashboard','detail','manage'].forEach(t => {
-        document.getElementById('tab-' + t).style.display = t === name ? 'block' : 'none';
+      ['dashboard','detail','rincian','manage'].forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.style.display = t === name ? 'block' : 'none';
       });
       if (name === 'manage') renderManage();
       if (name === 'detail') renderDetail();
+      if (name === 'rincian') renderRincianTab();
     }
 
     // ===================== RENDER DASHBOARD =====================
@@ -700,15 +753,43 @@
       const keys = monthKeys();
       const opts = keys.map(k => `<option value="${k}">${store[k].label}</option>`).join('');
       const filter = document.getElementById('filterMonth');
-      const prev = filter.value;
-      filter.innerHTML = `<option value="all">Semua Bulan</option>` + opts;
-      if ([...filter.options].some(o => o.value === prev)) filter.value = prev;
+      if (filter) {
+        const prev = filter.value;
+        filter.innerHTML = `<option value="all">Semua Bulan</option>` + opts;
+        if ([...filter.options].some(o => o.value === prev)) filter.value = prev;
+      }
 
       const detail = document.getElementById('detailMonth');
-      const prevD = detail.value;
-      detail.innerHTML = opts || '<option value="">—</option>';
-      if ([...detail.options].some(o => o.value === prevD)) detail.value = prevD;
-      else if (keys.length) detail.value = keys[keys.length-1];
+      if (detail) {
+        const prevD = detail.value;
+        detail.innerHTML = opts || '<option value="">—</option>';
+        if ([...detail.options].some(o => o.value === prevD)) detail.value = prevD;
+        else if (keys.length) detail.value = keys[keys.length-1];
+      }
+
+      const rinMonth = document.getElementById('rincianMonth');
+      if (rinMonth) {
+        const prevR = rinMonth.value;
+        rinMonth.innerHTML = opts || '<option value="">—</option>';
+        if ([...rinMonth.options].some(o => o.value === prevR)) rinMonth.value = prevR;
+        else if (keys.length) rinMonth.value = keys[keys.length-1];
+        populateRincianDates();
+      }
+    }
+
+    function populateRincianDates() {
+      const key = document.getElementById('rincianMonth')?.value;
+      const sel = document.getElementById('rincianDate');
+      if (!sel) return;
+      const prev = sel.value;
+      if (!key || !store[key]) {
+        sel.innerHTML = '<option value="all">Semua Tanggal</option>';
+        return;
+      }
+      const days = store[key].days || [];
+      sel.innerHTML = '<option value="all">Semua Tanggal</option>' +
+        days.map(d => `<option value="${d.tgl}">${d.tgl}</option>`).join('');
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
     }
 
     // ===================== DETAIL =====================
@@ -854,6 +935,109 @@
       const panel = document.getElementById('rincianPanel');
       if (panel) panel.style.display = 'none';
       document.querySelectorAll('#detailBody tr.day-row.active').forEach(tr => tr.classList.remove('active'));
+    }
+
+
+    function renderRincianTab() {
+      populateMonthSelects();
+      const key = document.getElementById('rincianMonth')?.value;
+      const tglFilter = document.getElementById('rincianDate')?.value || 'all';
+      const sectionF = document.getElementById('rincianSection')?.value || 'all';
+      const ketF = document.getElementById('rincianKet')?.value || 'all';
+      const q = (document.getElementById('searchRincian')?.value || '').toLowerCase();
+      const tbody = document.getElementById('rincianTabBody');
+      const summary = document.getElementById('rincianSummary');
+      if (!tbody) return;
+
+      if (!key || !store[key]) {
+        tbody.innerHTML = '';
+        if (summary) summary.innerHTML = '';
+        return;
+      }
+
+      // Rebuild date dropdown without resetting selection oddly
+      const dateSel = document.getElementById('rincianDate');
+      if (dateSel) {
+        const prev = dateSel.value;
+        const days = store[key].days || [];
+        dateSel.innerHTML = '<option value="all">Semua Tanggal</option>' +
+          days.map(d => `<option value="${d.tgl}">${d.tgl}</option>`).join('');
+        if ([...dateSel.options].some(o => o.value === prev)) dateSel.value = prev;
+        else dateSel.value = tglFilter;
+      }
+
+      let rows = [];
+      for (const d of (store[key].days || [])) {
+        if (tglFilter !== 'all' && d.tgl !== tglFilter) continue;
+        for (const x of (d.txns || [])) {
+          rows.push({ tgl: d.tgl, ...x });
+        }
+      }
+
+      if (sectionF !== 'all') rows = rows.filter(r => r.section === sectionF);
+      if (ketF !== 'all') {
+        rows = rows.filter(r => (r.ket || '').toUpperCase().includes(ketF));
+      }
+      if (q) {
+        rows = rows.filter(r => {
+          const blob = [r.tgl, r.sales, r.faktur, r.toko, r.alamat, r.ket, r.section].join(' ').toLowerCase();
+          return blob.includes(q);
+        });
+      }
+
+      // Summary cards
+      const sum = rows.reduce((a,x)=>({
+        mc: a.mc+(x.mCash||0), mt: a.mt+(x.mTf||0),
+        rc: a.rc+(x.rCash||0), rt: a.rt+(x.rTf||0),
+        tag: a.tag+(x.tagihan||0), n: a.n+1
+      }), {mc:0,mt:0,rc:0,rt:0,tag:0,n:0});
+      const totalM = sum.mc+sum.mt, totalR = sum.rc+sum.rt;
+      if (summary) {
+        summary.innerHTML = `
+          <div class="card minyak"><div class="card-label">Minyak</div><div class="card-value">Rp ${fmt(totalM)}</div>
+            <div class="card-sub">Cash ${fmt(sum.mc)} · TF ${fmt(sum.mt)}</div></div>
+          <div class="card rupa"><div class="card-label">Rupa-rupa</div><div class="card-value">Rp ${fmt(totalR)}</div>
+            <div class="card-sub">Cash ${fmt(sum.rc)} · TF ${fmt(sum.rt)}</div></div>
+          <div class="card cash"><div class="card-label">Jumlah Faktur</div><div class="card-value">${sum.n}</div>
+            <div class="card-sub">Tagihan Rp ${fmt(sum.tag)}</div></div>
+          <div class="card total"><div class="card-label">Grand Total Bayar</div><div class="card-value">Rp ${fmt(totalM+totalR)}</div>
+            <div class="card-sub">Minyak + Rupa</div></div>`;
+      }
+
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="13" class="empty-rincian">
+          Tidak ada data rincian.<br/>
+          ${!(store[key].days||[]).some(d=>d.txns&&d.txns.length)
+            ? 'Upload ulang file Excel bulan ini agar rincian faktur terbaca.'
+            : 'Coba ubah filter tanggal / section / status.'}
+        </td></tr>`;
+        return;
+      }
+
+      let html = rows.map((x,i) => `<tr>
+        <td class="center">${i+1}</td>
+        <td class="text-left">${x.tgl}</td>
+        <td class="text-left">${x.sales||'—'}</td>
+        <td class="text-left">${x.faktur||''}</td>
+        <td class="text-left">${x.toko||''}</td>
+        <td class="text-left">${x.alamat||''}</td>
+        <td>${fmt(x.tagihan)}</td>
+        <td>${fmt(x.mCash)}</td>
+        <td>${fmt(x.mTf)}</td>
+        <td>${fmt(x.rCash)}</td>
+        <td>${fmt(x.rTf)}</td>
+        <td class="text-left">${ketBadge(x.ket)}</td>
+        <td class="text-left">${x.section==='PIUTANG'?'Piutang':'Dropping'}</td>
+      </tr>`).join('');
+
+      html += `<tr class="total-row">
+        <td></td><td class="text-left" colspan="5">TOTAL (${rows.length} faktur)</td>
+        <td>${fmt(sum.tag)}</td>
+        <td>${fmt(sum.mc)}</td><td>${fmt(sum.mt)}</td>
+        <td>${fmt(sum.rc)}</td><td>${fmt(sum.rt)}</td>
+        <td></td><td></td>
+      </tr>`;
+      tbody.innerHTML = html;
     }
 
     // ===================== MANAGE =====================

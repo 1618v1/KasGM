@@ -1,5 +1,5 @@
 /* Service Worker — Laporan Uang Masuk PWA */
-const CACHE = 'uang-masuk-v3';
+const CACHE = 'uang-masuk-v4';
 const ASSETS = [
   './',
   './index.html',
