@@ -1,0 +1,26 @@
+{
+  "name": "Laporan Uang Masuk — Minyak & Rupa-rupa",
+  "short_name": "Uang Masuk",
+  "description": "Rekap uang masuk harian Minyak & Rupa-rupa. Upload Excel, kelola per bulan, offline PWA.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
