@@ -286,6 +286,36 @@
       transition: width 0.3s;
     }
 
+
+    /* Rincian detail panel */
+    .rincian-panel {
+      margin-top: 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .rincian-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: #0f172a;
+      border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
+    }
+    .rincian-header h3 { font-size: 0.95rem; font-weight: 650; }
+    .rincian-header .meta { font-size: 0.8rem; color: var(--muted); }
+    tr.day-row { cursor: pointer; }
+    tr.day-row:hover td { background: rgba(59,130,246,0.12); }
+    tr.day-row.active td { background: rgba(59,130,246,0.18); }
+    .rincian-section-title {
+      font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--muted);
+      padding: 10px 14px 6px; background: rgba(15,23,42,0.5);
+    }
+    .badge-lunas { background: rgba(34,197,94,0.2); color: #86efac; }
+    .badge-titip { background: rgba(245,158,11,0.2); color: #fcd34d; }
+    .badge-tf { background: rgba(59,130,246,0.2); color: #93c5fd; }
+    .badge-bg { background: rgba(168,85,247,0.2); color: #d8b4fe; }
+    .empty-rincian { padding: 24px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+
     footer {
       margin-top: 40px; text-align: center; color: var(--muted);
       font-size: 0.8rem; padding-top: 20px; border-top: 1px solid var(--border);
@@ -384,11 +414,14 @@
     <div id="tab-detail" style="display:none">
       <div class="toolbar">
         <div class="toolbar-left">
-          <select id="detailMonth" onchange="renderDetail()"></select>
+          <select id="detailMonth" onchange="selectedDay=null; renderDetail()"></select>
           <input type="search" id="searchDetail" placeholder="Cari tanggal..." oninput="renderDetail()" />
         </div>
+        <div class="toolbar-right">
+          <span style="color:var(--muted);font-size:0.8rem">Klik baris tanggal untuk lihat rincian faktur</span>
+        </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" style="max-height:280px">
         <table>
           <thead>
             <tr>
@@ -406,6 +439,36 @@
           </thead>
           <tbody id="detailBody"></tbody>
         </table>
+      </div>
+      <div id="rincianPanel" class="rincian-panel" style="display:none">
+        <div class="rincian-header">
+          <div>
+            <h3 id="rincianTitle">Rincian</h3>
+            <div class="meta" id="rincianMeta"></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="closeRincian()">Tutup ✕</button>
+        </div>
+        <div class="table-wrap" style="max-height:420px;border:none;border-radius:0">
+          <table>
+            <thead>
+              <tr>
+                <th class="center">No</th>
+                <th class="text-left">Sales</th>
+                <th class="text-left">No Faktur</th>
+                <th class="text-left">Nama Toko</th>
+                <th class="text-left">Alamat</th>
+                <th>Tagihan</th>
+                <th>Minyak Cash</th>
+                <th>Minyak TF</th>
+                <th>Rupa Cash</th>
+                <th>Rupa TF</th>
+                <th class="text-left">Ket</th>
+                <th class="text-left">Section</th>
+              </tr>
+            </thead>
+            <tbody id="rincianBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -459,6 +522,7 @@
     // ===================== STATE =====================
     const STORAGE_KEY = 'laporan_uang_masuk_v1';
     let store = loadStore(); // { "2026-09": { label, days: [...] }, ... }
+    let selectedDay = null; // { monthKey, tgl }
 
     // Seed with September 2026 data we already extracted
     if (!store['2026-09']) {
@@ -652,7 +716,7 @@
       const key = document.getElementById('detailMonth').value;
       const q = (document.getElementById('searchDetail').value || '').toLowerCase();
       const tbody = document.getElementById('detailBody');
-      if (!key || !store[key]) { tbody.innerHTML = ''; return; }
+      if (!key || !store[key]) { tbody.innerHTML = ''; closeRincian(); return; }
 
       let days = store[key].days;
       if (q) days = days.filter(d => d.tgl.toLowerCase().includes(q));
@@ -662,9 +726,11 @@
         const tr = (d.rc||0) + (d.rt||0);
         const tc = (d.mc||0) + (d.rc||0);
         const g = tm + tr;
-        return `<tr>
+        const active = selectedDay && selectedDay.monthKey === key && selectedDay.tgl === d.tgl;
+        const hasTx = d.txns && d.txns.length;
+        return `<tr class="day-row${active ? ' active' : ''}" onclick="openRincian('${key}','${d.tgl}')">
           <td class="center">${i+1}</td>
-          <td class="text-left">${d.tgl}</td>
+          <td class="text-left">${d.tgl}${hasTx ? ' <span style="opacity:0.5">📋</span>' : ''}</td>
           <td>${fmt(d.mc)}</td>
           <td>${fmt(d.mt)}</td>
           <td><strong>${fmt(tm)}</strong></td>
@@ -685,6 +751,109 @@
         <td>${fmt(s.mc+s.rc)}</td><td>${fmt(tm+tr)}</td>
       </tr>`;
       tbody.innerHTML = html;
+
+      // Keep rincian open if still valid
+      if (selectedDay && selectedDay.monthKey === key) {
+        openRincian(selectedDay.monthKey, selectedDay.tgl, true);
+      }
+    }
+
+    function ketBadge(ket) {
+      if (!ket) return '';
+      const u = ket.toUpperCase();
+      let cls = 'badge';
+      if (u.includes('LUNAS')) cls += ' badge-lunas';
+      else if (u.includes('TITIP')) cls += ' badge-titip';
+      else if (u.includes('TF')) cls += ' badge-tf';
+      else if (u.includes('BG')) cls += ' badge-bg';
+      return `<span class="${cls}">${ket}</span>`;
+    }
+
+    function openRincian(monthKey, tgl, silent) {
+      selectedDay = { monthKey, tgl };
+      const day = (store[monthKey]?.days || []).find(d => d.tgl === tgl);
+      const panel = document.getElementById('rincianPanel');
+      const body = document.getElementById('rincianBody');
+      if (!day) { closeRincian(); return; }
+
+      document.getElementById('rincianTitle').textContent = `Rincian ${tgl} — ${store[monthKey].label}`;
+      const txns = day.txns || [];
+      const nPiutang = txns.filter(x => x.section === 'PIUTANG').length;
+      const nDrop = txns.filter(x => x.section === 'DROPPING').length;
+      document.getElementById('rincianMeta').textContent =
+        txns.length
+          ? `${txns.length} faktur · Piutang ${nPiutang} · Cash Dropping ${nDrop}`
+          : 'Tidak ada rincian faktur (data di-upload sebelum fitur rincian, atau sheet tidak terbaca). Upload ulang Excel untuk mengisi rincian.';
+
+      if (!txns.length) {
+        body.innerHTML = `<tr><td colspan="12" class="empty-rincian">Belum ada data rincian untuk tanggal ini.<br/>Upload ulang file Excel bulan ini agar faktur per toko terbaca.</td></tr>`;
+        panel.style.display = 'block';
+        if (!silent) renderDetail();
+        return;
+      }
+
+      // Group by section
+      const sections = [
+        { key: 'PIUTANG', title: 'PIUTANG TEMPO' },
+        { key: 'DROPPING', title: 'CASH DROPPING' }
+      ];
+      let html = '';
+      let no = 0;
+      for (const sec of sections) {
+        const list = txns.filter(x => x.section === sec.key);
+        if (!list.length) continue;
+        html += `<tr><td colspan="12" class="rincian-section-title">${sec.title} (${list.length})</td></tr>`;
+        for (const x of list) {
+          no++;
+          html += `<tr>
+            <td class="center">${no}</td>
+            <td class="text-left">${x.sales || '—'}</td>
+            <td class="text-left">${x.faktur || ''}</td>
+            <td class="text-left">${x.toko || ''}</td>
+            <td class="text-left">${x.alamat || ''}</td>
+            <td>${fmt(x.tagihan)}</td>
+            <td>${fmt(x.mCash)}</td>
+            <td>${fmt(x.mTf)}</td>
+            <td>${fmt(x.rCash)}</td>
+            <td>${fmt(x.rTf)}</td>
+            <td class="text-left">${ketBadge(x.ket)}</td>
+            <td class="text-left">${sec.key === 'PIUTANG' ? 'Piutang' : 'Dropping'}</td>
+          </tr>`;
+        }
+      }
+      // totals
+      const sum = txns.reduce((a,x)=>({
+        t: a.t+(x.tagihan||0), mc:a.mc+(x.mCash||0), mt:a.mt+(x.mTf||0),
+        rc:a.rc+(x.rCash||0), rt:a.rt+(x.rTf||0)
+      }), {t:0,mc:0,mt:0,rc:0,rt:0});
+      html += `<tr class="total-row">
+        <td></td><td class="text-left" colspan="4">TOTAL RINCIAN</td>
+        <td>${fmt(sum.t)}</td>
+        <td>${fmt(sum.mc)}</td><td>${fmt(sum.mt)}</td>
+        <td>${fmt(sum.rc)}</td><td>${fmt(sum.rt)}</td>
+        <td></td><td></td>
+      </tr>`;
+      body.innerHTML = html;
+      panel.style.display = 'block';
+      if (!silent) {
+        // re-highlight without clearing panel
+        const key = monthKey;
+        const q = (document.getElementById('searchDetail').value || '').toLowerCase();
+        let days = store[key].days;
+        if (q) days = days.filter(d => d.tgl.toLowerCase().includes(q));
+        // only update active class
+        document.querySelectorAll('#detailBody tr.day-row').forEach((tr, i) => {
+          const d = days[i];
+          if (d) tr.classList.toggle('active', d.tgl === tgl);
+        });
+      }
+    }
+
+    function closeRincian() {
+      selectedDay = null;
+      const panel = document.getElementById('rincianPanel');
+      if (panel) panel.style.display = 'none';
+      document.querySelectorAll('#detailBody tr.day-row.active').forEach(tr => tr.classList.remove('active'));
     }
 
     // ===================== MANAGE =====================
@@ -834,7 +1003,7 @@
           const ws = wb.Sheets[name];
           const data = extractFromSheet(ws);
           if (data) {
-            days.push({ tgl: name, ...data });
+            days.push({ tgl: name, mc: data.mc, mt: data.mt, rc: data.rc, rt: data.rt, txns: data.txns || [] });
           }
         }
 
@@ -869,60 +1038,147 @@
     }
 
     function extractFromSheet(ws) {
-      // Convert to array of arrays
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
       let mc = 0, mt = 0, rc = 0, rt = 0;
       let found = false;
+      const txns = [];
+      let section = 'PIUTANG'; // PIUTANG | DROPPING
+      let salesHint = '';
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] || [];
-        // Look for "TOTAL UANG MASUK"
-        for (let c = 0; c < row.length; c++) {
-          const v = row[c];
-          if (v && String(v).toUpperCase().includes('TOTAL UANG MASUK')) {
-            // Values usually 1-2 rows below
-            for (let off = 1; off <= 3; off++) {
-              const r2 = rows[i + off] || [];
-              // Find first sequence of 4 numbers (or mostly numbers)
-              const nums = [];
-              for (let j = 0; j < r2.length; j++) {
-                if (typeof r2[j] === 'number') nums.push({ col: j, val: r2[j] });
-              }
-              if (nums.length >= 2) {
-                // Prefer columns around index 9-12 (0-based ~9-12) if present
-                // Otherwise take first 4 numbers
-                let selected = nums.slice(0, 4);
-                // Try to find contiguous block near col 9-13
-                const near = nums.filter(n => n.col >= 8 && n.col <= 14);
-                if (near.length >= 2) selected = near.slice(0, 4);
+        const rowStr = row.map(c => (c == null ? '' : String(c))).join(' ').toUpperCase();
 
-                mc = selected[0]?.val || 0;
-                mt = selected[1]?.val || 0;
-                rc = selected[2]?.val || 0;
-                rt = selected[3]?.val || 0;
-                found = true;
-                break;
-              }
+        if (rowStr.includes('CASH DROPPING')) { section = 'DROPPING'; salesHint = ''; continue; }
+        if (rowStr.includes('PIUTANG TEMPO')) { section = 'PIUTANG'; salesHint = ''; continue; }
+        if (rowStr.includes('TOTAL UANG MASUK')) {
+          for (let off = 1; off <= 3; off++) {
+            const r2 = rows[i + off] || [];
+            const nums = [];
+            for (let j = 0; j < r2.length; j++) {
+              if (typeof r2[j] === 'number') nums.push({ col: j, val: r2[j] });
             }
-            break;
-          }
-        }
-        if (found) break;
-      }
-
-      if (!found) {
-        // Fallback: look for TOTAL CASH row
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i] || [];
-          for (let c = 0; c < row.length; c++) {
-            if (row[c] && String(row[c]).toUpperCase().trim() === 'TOTAL CASH') {
-              // Can't split minyak/rupa reliably; skip
+            if (nums.length >= 2) {
+              let selected = nums.slice(0, 4);
+              const near = nums.filter(n => n.col >= 8 && n.col <= 14);
+              if (near.length >= 2) selected = near.slice(0, 4);
+              mc = selected[0]?.val || 0;
+              mt = selected[1]?.val || 0;
+              rc = selected[2]?.val || 0;
+              rt = selected[3]?.val || 0;
+              found = true;
+              break;
             }
           }
+          continue;
         }
+
+        // Skip pure header / total rows for txn parse
+        if (rowStr.includes('TOTAL') && !rowStr.match(/\b\d{5,}\b/)) continue;
+        if (rowStr.includes('NO FAKTUR') || rowStr.includes('NAMA TOKO')) continue;
+        if (rowStr.includes('PEMBAYARAN') || rowStr.includes('MINYAK')) continue;
+        if (rowStr.includes('MENGETAHUI') || rowStr.includes('UANG MASUK CASH')) continue;
+
+        // Detect sales name in column (often col index 2 = C in Excel when B is NO)
+        // Row pattern from Excel: often [empty, NO, SALES, FAKTUR, TOKO, ALAMAT, TGL, JT, TAGIHAN, M_CASH, M_TF, R_CASH, R_TF, KET]
+        // or compacted. We'll scan for faktur-like number.
+        let faktur = null, fakturCol = -1;
+        for (let j = 0; j < row.length; j++) {
+          const v = row[j];
+          if (v == null) continue;
+          const s = String(v).trim();
+          // No faktur typically long numeric string starting with 0
+          if (/^0?\d{12,}$/.test(s) || /^011\d{12,}$/.test(s)) {
+            faktur = s; fakturCol = j; break;
+          }
+        }
+        if (!faktur) {
+          // Maybe sales name only on first row of group
+          for (let j = 0; j < Math.min(row.length, 5); j++) {
+            const v = row[j];
+            if (typeof v === 'string') {
+              const up = v.toUpperCase().trim();
+              if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI','PAK ITO'].some(x => up.includes(x)) ||
+                  up.includes('(HAFID)') || up.includes('(JOSSY)') || up.includes('(RAJU)')) {
+                salesHint = v.toString().trim();
+              }
+            }
+          }
+          continue;
+        }
+
+        // Build txn from nearby columns
+        // Expect: ... faktur, toko, alamat, tgl, jt, tagihan, mCash, mTf, rCash, rTf, ket
+        const after = fakturCol + 1;
+        const toko = row[after] != null ? String(row[after]).trim() : '';
+        const alamat = row[after+1] != null ? String(row[after+1]).trim() : '';
+        // numbers after
+        const nums = [];
+        let ket = '';
+        for (let j = after + 2; j < row.length; j++) {
+          const v = row[j];
+          if (typeof v === 'number') nums.push(v);
+          else if (v != null && String(v).trim() && typeof v !== 'object') {
+            const s = String(v).trim().toUpperCase();
+            if (s.includes('LUNAS') || s.includes('TITIP') || s.includes('TF') || s.includes('BG')) ket = String(v).trim();
+          }
+        }
+        // Also check sales in columns before faktur
+        let sales = salesHint;
+        for (let j = 0; j < fakturCol; j++) {
+          const v = row[j];
+          if (typeof v === 'string' && v.trim()) {
+            const up = v.toUpperCase();
+            if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI'].some(x => up.includes(x)) || up.includes('(')) {
+              sales = v.trim(); salesHint = sales;
+            }
+          }
+        }
+
+        // Payment columns: typically last 4 numbers before optional total, or: tagihan + 4 payments
+        // Heuristic: if >= 5 numbers, first is tagihan, next up to 4 are payments
+        let tagihan = 0, mCash = 0, mTf = 0, rCash = 0, rTf = 0;
+        if (nums.length >= 5) {
+          tagihan = nums[0];
+          mCash = nums[1] || 0; mTf = nums[2] || 0;
+          rCash = nums[3] || 0; rTf = nums[4] || 0;
+        } else if (nums.length === 4) {
+          // could be payments only or tagihan+3
+          mCash = nums[0]; mTf = nums[1]; rCash = nums[2]; rTf = nums[3];
+          tagihan = mCash + mTf + rCash + rTf;
+        } else if (nums.length === 3) {
+          tagihan = nums[0]; mCash = nums[1]; rCash = nums[2];
+        } else if (nums.length === 2) {
+          tagihan = nums[0]; mCash = nums[1];
+        } else if (nums.length === 1) {
+          mCash = nums[0]; tagihan = nums[0];
+        }
+
+        if (!toko && !mCash && !mTf && !rCash && !rTf) continue;
+
+        txns.push({
+          section,
+          sales: sales || '',
+          faktur,
+          toko,
+          alamat,
+          tagihan,
+          mCash, mTf, rCash, rTf,
+          ket
+        });
       }
-      if (!found && mc === 0 && rc === 0) return null;
-      return { mc, mt, rc, rt };
+
+      if (!found && mc === 0 && rc === 0) {
+        // derive from txns if totals missing
+        if (txns.length) {
+          mc = txns.reduce((a,x)=>a+(x.mCash||0),0);
+          mt = txns.reduce((a,x)=>a+(x.mTf||0),0);
+          rc = txns.reduce((a,x)=>a+(x.rCash||0),0);
+          rt = txns.reduce((a,x)=>a+(x.rTf||0),0);
+          found = true;
+        } else return null;
+      }
+      return { mc, mt, rc, rt, txns };
     }
 
     function detectYearMonth(wb, days, filename) {
