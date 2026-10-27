@@ -231,7 +231,7 @@
     .upload-zone strong { color: var(--text); }
 
     /* Tabs */
-    .tabs { display: flex; gap: 2px; margin-bottom: 12px; background: var(--card); padding: 2px; border-radius: 8px; width: fit-content; }
+    .tabs { display: flex; gap: 2px; margin-bottom: 12px; background: var(--card); padding: 2px; border-radius: 8px; width: fit-content; flex-wrap: wrap; }
     .tab {
       padding: 4px 11px; border-radius: 6px; border: none;
       background: transparent; color: var(--muted);
@@ -362,6 +362,8 @@
       <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
       <button class="tab" data-tab="detail" onclick="switchTab('detail')">Detail Harian</button>
       <button class="tab" data-tab="rincian" onclick="switchTab('rincian')">Rincian Harian</button>
+      <button class="tab" data-tab="piutang" onclick="switchTab('piutang')">Piutang Tempo</button>
+      <button class="tab" data-tab="dropping" onclick="switchTab('dropping')">Cash Dropping</button>
       <button class="tab" data-tab="manage" onclick="switchTab('manage')">Kelola Bulan</button>
     </div>
 
@@ -523,6 +525,98 @@
       </div>
     </div>
 
+    <!-- PIUTANG TEMPO TAB -->
+    <div id="tab-piutang" style="display:none">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select id="piutangMonth" onchange="renderPiutangTab()"></select>
+          <select id="piutangDate" onchange="renderPiutangTab()">
+            <option value="all">Semua Tanggal</option>
+          </select>
+          <input type="search" id="searchPiutang" placeholder="Cari toko, faktur, sales..." oninput="renderPiutangTab()" style="min-width:160px" />
+        </div>
+        <div class="toolbar-right">
+          <select id="piutangKet" onchange="renderPiutangTab()">
+            <option value="all">Semua Status</option>
+            <option value="LUNAS">Lunas</option>
+            <option value="TITIP">Titip</option>
+            <option value="TF">Transfer/BG</option>
+          </select>
+        </div>
+      </div>
+      <div id="piutangSummary" class="cards" style="margin-bottom:14px"></div>
+      <div class="table-wrap" style="max-height:560px">
+        <table>
+          <thead>
+            <tr>
+              <th class="center">No</th>
+              <th class="text-left">Tgl</th>
+              <th class="text-left">Sales</th>
+              <th class="text-left">No Faktur</th>
+              <th class="text-left">Nama Toko</th>
+              <th class="text-left">Alamat</th>
+              <th class="text-left">Tgl Faktur</th>
+              <th class="text-left">JT</th>
+              <th>Tagihan</th>
+              <th>Minyak Cash</th>
+              <th>Minyak TF/BG</th>
+              <th>Rupa Cash</th>
+              <th>Rupa TF/BG</th>
+              <th class="text-left">Ket</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="piutangBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CASH DROPPING TAB -->
+    <div id="tab-dropping" style="display:none">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select id="droppingMonth" onchange="renderDroppingTab()"></select>
+          <select id="droppingDate" onchange="renderDroppingTab()">
+            <option value="all">Semua Tanggal</option>
+          </select>
+          <input type="search" id="searchDropping" placeholder="Cari toko, faktur, sales..." oninput="renderDroppingTab()" style="min-width:160px" />
+        </div>
+        <div class="toolbar-right">
+          <select id="droppingKet" onchange="renderDroppingTab()">
+            <option value="all">Semua Status</option>
+            <option value="LUNAS">Lunas</option>
+            <option value="TITIP">Titip</option>
+            <option value="TF">Transfer/BG</option>
+          </select>
+        </div>
+      </div>
+      <div id="droppingSummary" class="cards" style="margin-bottom:14px"></div>
+      <div class="table-wrap" style="max-height:560px">
+        <table>
+          <thead>
+            <tr>
+              <th class="center">No</th>
+              <th class="text-left">Tgl</th>
+              <th class="text-left">Dropping/Sales</th>
+              <th class="text-left">No Faktur</th>
+              <th class="text-left">Nama Toko</th>
+              <th class="text-left">Alamat</th>
+              <th class="text-left">Tgl Faktur</th>
+              <th class="text-left">JT</th>
+              <th>Nominal Faktur</th>
+              <th>Minyak Cash</th>
+              <th>Minyak TF</th>
+              <th>Rupa Cash</th>
+              <th>Rupa TF</th>
+              <th class="text-left">Ket</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="droppingBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- MANAGE TAB -->
     <div id="tab-manage" style="display:none">
       <div class="section-title">📁 Upload Data Baru</div>
@@ -572,50 +666,70 @@
   <script>
     // ===================== STATE =====================
     const STORAGE_KEY = 'laporan_uang_masuk_v1';
-    let store = loadStore(); // { "2026-09": { label, days: [...] }, ... }
+    let store = loadStore();
     let selectedDay = null; // { monthKey, tgl }
 
-    // Seed with September 2026 data we already extracted
-    if (!store['2026-09']) {
-      store['2026-09'] = {
-        label: 'September 2026',
-        days: [
-          { tgl:'01-09', mc:20095300, mt:1022500, rc:9237235, rt:0 },
-          { tgl:'02-09', mc:15571200, mt:0, rc:7518164, rt:0 },
-          { tgl:'03-09', mc:14333900, mt:0, rc:3648334, rt:582000 },
-          { tgl:'04-09', mc:18768800, mt:0, rc:2164892, rt:0 },
-          { tgl:'05-09', mc:33517200, mt:0, rc:6033645, rt:0 },
-          { tgl:'07-09', mc:28532064, mt:4150000, rc:3182744, rt:0 },
-          { tgl:'08-09', mc:20380736, mt:0, rc:1520348, rt:0 },
-          { tgl:'09-09', mc:69266700, mt:0, rc:3170053, rt:0 },
-          { tgl:'10-09', mc:28153816, mt:1718400, rc:9975540, rt:87000 },
-          { tgl:'11-09', mc:16637700, mt:5621634, rc:2686222, rt:4431732 },
-          { tgl:'12-09', mc:14712300, mt:1895400, rc:4786228, rt:195140 },
-          { tgl:'14-09', mc:18902300, mt:574000, rc:11998400, rt:0 },
-          { tgl:'15-09', mc:21728464, mt:17250000, rc:6858117, rt:0 },
-          { tgl:'16-09', mc:27918900, mt:0, rc:5759218, rt:0 },
-          { tgl:'17-09', mc:28542700, mt:210600, rc:5754539, rt:435000 },
-          { tgl:'18-09', mc:16537200, mt:0, rc:3594872, rt:0 },
-          { tgl:'19-09', mc:24138620, mt:115100, rc:5115333, rt:316800 },
-          { tgl:'21-09', mc:24204580, mt:0, rc:7368319, rt:0 },
-          { tgl:'22-09', mc:16438100, mt:0, rc:6806224, rt:0 },
-          { tgl:'23-09', mc:23019400, mt:18145000, rc:2694991, rt:215892 },
-          { tgl:'24-09', mc:13343800, mt:1580000, rc:8445977, rt:182000 },
-          { tgl:'25-09', mc:16907600, mt:12215500, rc:3465057, rt:3599700 },
-          { tgl:'26-09', mc:14928700, mt:2694616, rc:2068591, rt:1821984 },
-          { tgl:'28-09', mc:25833000, mt:0, rc:5785957, rt:435000 },
-          { tgl:'29-09', mc:19315736, mt:421200, rc:3911856, rt:0 },
-          { tgl:'30-09', mc:17339600, mt:0, rc:16130648, rt:0 },
-        ]
-      };
-      saveStore();
+    // ===== FIX BUG 1: Seed hanya sekali saat install pertama =====
+    // Cek apakah STORAGE_KEY sudah pernah ada di localStorage.
+    // Jika belum ada (fresh install), baru seed September 2026.
+    // Kalau user sudah pernah menghapus bulan seed, STORAGE_KEY tetap ada
+    // (berisi "{}" atau bulan lain), sehingga seed tidak akan resurrect.
+    try {
+      if (localStorage.getItem(STORAGE_KEY) === null && !store['2026-09']) {
+        store['2026-09'] = {
+          label: 'September 2026',
+          days: [
+            { tgl:'01-09', mc:20095300, mt:1022500, rc:9237235, rt:0 },
+            { tgl:'02-09', mc:15571200, mt:0, rc:7518164, rt:0 },
+            { tgl:'03-09', mc:14333900, mt:0, rc:3648334, rt:582000 },
+            { tgl:'04-09', mc:18768800, mt:0, rc:2164892, rt:0 },
+            { tgl:'05-09', mc:33517200, mt:0, rc:6033645, rt:0 },
+            { tgl:'07-09', mc:28532064, mt:4150000, rc:3182744, rt:0 },
+            { tgl:'08-09', mc:20380736, mt:0, rc:1520348, rt:0 },
+            { tgl:'09-09', mc:69266700, mt:0, rc:3170053, rt:0 },
+            { tgl:'10-09', mc:28153816, mt:1718400, rc:9975540, rt:87000 },
+            { tgl:'11-09', mc:16637700, mt:5621634, rc:2686222, rt:4431732 },
+            { tgl:'12-09', mc:14712300, mt:1895400, rc:4786228, rt:195140 },
+            { tgl:'14-09', mc:18902300, mt:574000, rc:11998400, rt:0 },
+            { tgl:'15-09', mc:21728464, mt:17250000, rc:6858117, rt:0 },
+            { tgl:'16-09', mc:27918900, mt:0, rc:5759218, rt:0 },
+            { tgl:'17-09', mc:28542700, mt:210600, rc:5754539, rt:435000 },
+            { tgl:'18-09', mc:16537200, mt:0, rc:3594872, rt:0 },
+            { tgl:'19-09', mc:24138620, mt:115100, rc:5115333, rt:316800 },
+            { tgl:'21-09', mc:24204580, mt:0, rc:7368319, rt:0 },
+            { tgl:'22-09', mc:16438100, mt:0, rc:6806224, rt:0 },
+            { tgl:'23-09', mc:23019400, mt:18145000, rc:2694991, rt:215892 },
+            { tgl:'24-09', mc:13343800, mt:1580000, rc:8445977, rt:182000 },
+            { tgl:'25-09', mc:16907600, mt:12215500, rc:3465057, rt:3599700 },
+            { tgl:'26-09', mc:14928700, mt:2694616, rc:2068591, rt:1821984 },
+            { tgl:'28-09', mc:25833000, mt:0, rc:5785957, rt:435000 },
+            { tgl:'29-09', mc:19315736, mt:421200, rc:3911856, rt:0 },
+            { tgl:'30-09', mc:17339600, mt:0, rc:16130648, rt:0 },
+          ]
+        };
+        saveStore();
+      }
+    } catch (e) {
+      console.warn('[seed] skipped:', e);
     }
 
     // ===================== STORAGE =====================
+    // ===== FIX BUG 2: validasi struktur store =====
+    function isValidStore(o) {
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+      for (const v of Object.values(o)) {
+        if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+        if (!Array.isArray(v.days)) return false;
+      }
+      return true;
+    }
     function loadStore() {
       try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      } catch { return {}; }
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return isValidStore(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
     }
     function saveStore() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -659,13 +773,15 @@
     // ===================== TABS =====================
     function switchTab(name) {
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-      ['dashboard','detail','rincian','manage'].forEach(t => {
+      ['dashboard','detail','rincian','piutang','dropping','manage'].forEach(t => {
         const el = document.getElementById('tab-' + t);
         if (el) el.style.display = t === name ? 'block' : 'none';
       });
       if (name === 'manage') renderManage();
       if (name === 'detail') renderDetail();
       if (name === 'rincian') renderRincianTab();
+      if (name === 'piutang') renderPiutangTab();
+      if (name === 'dropping') renderDroppingTab();
     }
 
     // ===================== RENDER DASHBOARD =====================
@@ -751,12 +867,21 @@
 
     function populateMonthSelects() {
       const keys = monthKeys();
+      const latest = keys.length ? keys[keys.length - 1] : '';
       const opts = keys.map(k => `<option value="${k}">${store[k].label}</option>`).join('');
       const filter = document.getElementById('filterMonth');
       if (filter) {
         const prev = filter.value;
         filter.innerHTML = `<option value="all">Semua Bulan</option>` + opts;
-        if ([...filter.options].some(o => o.value === prev)) filter.value = prev;
+        // Pertama buka → bulan terkini. Setelah user pilih (termasuk Semua), hormati pilihan.
+        if (!filter.dataset.inited) {
+          if (latest) filter.value = latest;
+          filter.dataset.inited = '1';
+        } else if (prev && [...filter.options].some(o => o.value === prev)) {
+          filter.value = prev;
+        } else if (latest) {
+          filter.value = latest;
+        }
       }
 
       const detail = document.getElementById('detailMonth');
@@ -764,7 +889,7 @@
         const prevD = detail.value;
         detail.innerHTML = opts || '<option value="">—</option>';
         if ([...detail.options].some(o => o.value === prevD)) detail.value = prevD;
-        else if (keys.length) detail.value = keys[keys.length-1];
+        else if (latest) detail.value = latest;
       }
 
       const rinMonth = document.getElementById('rincianMonth');
@@ -772,9 +897,35 @@
         const prevR = rinMonth.value;
         rinMonth.innerHTML = opts || '<option value="">—</option>';
         if ([...rinMonth.options].some(o => o.value === prevR)) rinMonth.value = prevR;
-        else if (keys.length) rinMonth.value = keys[keys.length-1];
+        else if (latest) rinMonth.value = latest;
         populateRincianDates();
       }
+
+      ['piutangMonth', 'droppingMonth'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const prev = el.value;
+        el.innerHTML = opts || '<option value="">—</option>';
+        if ([...el.options].some(o => o.value === prev)) el.value = prev;
+        else if (latest) el.value = latest;
+      });
+      populateSectionDates('piutang');
+      populateSectionDates('dropping');
+    }
+
+    function populateSectionDates(prefix) {
+      const key = document.getElementById(prefix + 'Month')?.value;
+      const sel = document.getElementById(prefix + 'Date');
+      if (!sel) return;
+      const prev = sel.value;
+      if (!key || !store[key]) {
+        sel.innerHTML = '<option value="all">Semua Tanggal</option>';
+        return;
+      }
+      const days = store[key].days || [];
+      sel.innerHTML = '<option value="all">Semua Tanggal</option>' +
+        days.map(d => `<option value="${d.tgl}">${d.tgl}</option>`).join('');
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
     }
 
     function populateRincianDates() {
@@ -1040,6 +1191,151 @@
       tbody.innerHTML = html;
     }
 
+    // ===================== PIUTANG TEMPO =====================
+    function collectSectionRows(section, monthKey, tglFilter, ketF, q) {
+      let rows = [];
+      if (!monthKey || !store[monthKey]) return rows;
+      for (const d of (store[monthKey].days || [])) {
+        if (tglFilter !== 'all' && d.tgl !== tglFilter) continue;
+        for (const x of (d.txns || [])) {
+          if (x.section !== section) continue;
+          rows.push({ tgl: d.tgl, ...x });
+        }
+      }
+      if (ketF && ketF !== 'all') {
+        rows = rows.filter(r => (r.ket || '').toUpperCase().includes(ketF));
+      }
+      if (q) {
+        rows = rows.filter(r => {
+          const blob = [r.tgl, r.sales, r.faktur, r.toko, r.alamat, r.ket, r.tglFaktur, r.jt].join(' ').toLowerCase();
+          return blob.includes(q);
+        });
+      }
+      return rows;
+    }
+
+    function renderPiutangTab() {
+      populateMonthSelects();
+      const key = document.getElementById('piutangMonth')?.value;
+      const tglFilter = document.getElementById('piutangDate')?.value || 'all';
+      const ketF = document.getElementById('piutangKet')?.value || 'all';
+      const q = (document.getElementById('searchPiutang')?.value || '').toLowerCase();
+      const tbody = document.getElementById('piutangBody');
+      const summary = document.getElementById('piutangSummary');
+      if (!tbody) return;
+      populateSectionDates('piutang');
+
+      const rows = collectSectionRows('PIUTANG', key, tglFilter, ketF, q);
+      const sum = rows.reduce((a,x)=>({
+        mc: a.mc+(x.mCash||0), mt: a.mt+(x.mTf||0),
+        rc: a.rc+(x.rCash||0), rt: a.rt+(x.rTf||0),
+        tag: a.tag+(x.tagihan||0), n: a.n+1
+      }), {mc:0,mt:0,rc:0,rt:0,tag:0,n:0});
+      const totalM = sum.mc+sum.mt, totalR = sum.rc+sum.rt;
+      if (summary) {
+        summary.innerHTML = `
+          <div class="card minyak"><div class="card-label">Minyak</div><div class="card-value">Rp ${fmt(totalM)}</div>
+            <div class="card-sub">Cash ${fmt(sum.mc)} · TF ${fmt(sum.mt)}</div></div>
+          <div class="card rupa"><div class="card-label">Rupa-rupa</div><div class="card-value">Rp ${fmt(totalR)}</div>
+            <div class="card-sub">Cash ${fmt(sum.rc)} · TF ${fmt(sum.rt)}</div></div>
+          <div class="card cash"><div class="card-label">Jumlah Faktur</div><div class="card-value">${sum.n}</div>
+            <div class="card-sub">Tagihan Rp ${fmt(sum.tag)}</div></div>
+          <div class="card total"><div class="card-label">Grand Total Bayar</div><div class="card-value">Rp ${fmt(totalM+totalR)}</div>
+            <div class="card-sub">Piutang Tempo</div></div>`;
+      }
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="15" class="empty-rincian">Tidak ada data Piutang Tempo.<br/>Upload ulang file Excel agar rincian terbaca.</td></tr>`;
+        return;
+      }
+      let html = rows.map((x,i) => {
+        const total = (x.mCash||0)+(x.mTf||0)+(x.rCash||0)+(x.rTf||0);
+        return `<tr>
+          <td class="center">${i+1}</td>
+          <td class="text-left">${x.tgl||''}</td>
+          <td class="text-left">${x.sales||'—'}</td>
+          <td class="text-left">${x.faktur||''}</td>
+          <td class="text-left">${x.toko||''}</td>
+          <td class="text-left">${x.alamat||''}</td>
+          <td class="text-left">${x.tglFaktur||''}</td>
+          <td class="text-left">${x.jt||''}</td>
+          <td>${fmt(x.tagihan)}</td>
+          <td>${fmt(x.mCash)}</td><td>${fmt(x.mTf)}</td>
+          <td>${fmt(x.rCash)}</td><td>${fmt(x.rTf)}</td>
+          <td class="text-left">${ketBadge(x.ket)}</td>
+          <td><strong>${fmt(total)}</strong></td>
+        </tr>`;
+      }).join('');
+      html += `<tr class="total-row">
+        <td></td><td class="text-left" colspan="7">TOTAL (${rows.length} faktur)</td>
+        <td>${fmt(sum.tag)}</td>
+        <td>${fmt(sum.mc)}</td><td>${fmt(sum.mt)}</td>
+        <td>${fmt(sum.rc)}</td><td>${fmt(sum.rt)}</td>
+        <td></td><td>${fmt(totalM+totalR)}</td>
+      </tr>`;
+      tbody.innerHTML = html;
+    }
+
+    function renderDroppingTab() {
+      populateMonthSelects();
+      const key = document.getElementById('droppingMonth')?.value;
+      const tglFilter = document.getElementById('droppingDate')?.value || 'all';
+      const ketF = document.getElementById('droppingKet')?.value || 'all';
+      const q = (document.getElementById('searchDropping')?.value || '').toLowerCase();
+      const tbody = document.getElementById('droppingBody');
+      const summary = document.getElementById('droppingSummary');
+      if (!tbody) return;
+      populateSectionDates('dropping');
+
+      const rows = collectSectionRows('DROPPING', key, tglFilter, ketF, q);
+      const sum = rows.reduce((a,x)=>({
+        mc: a.mc+(x.mCash||0), mt: a.mt+(x.mTf||0),
+        rc: a.rc+(x.rCash||0), rt: a.rt+(x.rTf||0),
+        tag: a.tag+(x.tagihan||0), n: a.n+1
+      }), {mc:0,mt:0,rc:0,rt:0,tag:0,n:0});
+      const totalM = sum.mc+sum.mt, totalR = sum.rc+sum.rt;
+      if (summary) {
+        summary.innerHTML = `
+          <div class="card minyak"><div class="card-label">Minyak</div><div class="card-value">Rp ${fmt(totalM)}</div>
+            <div class="card-sub">Cash ${fmt(sum.mc)} · TF ${fmt(sum.mt)}</div></div>
+          <div class="card rupa"><div class="card-label">Rupa-rupa</div><div class="card-value">Rp ${fmt(totalR)}</div>
+            <div class="card-sub">Cash ${fmt(sum.rc)} · TF ${fmt(sum.rt)}</div></div>
+          <div class="card cash"><div class="card-label">Jumlah Faktur</div><div class="card-value">${sum.n}</div>
+            <div class="card-sub">Nominal Rp ${fmt(sum.tag)}</div></div>
+          <div class="card total"><div class="card-label">Grand Total Bayar</div><div class="card-value">Rp ${fmt(totalM+totalR)}</div>
+            <div class="card-sub">Cash Dropping</div></div>`;
+      }
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="15" class="empty-rincian">Tidak ada data Cash Dropping.<br/>Upload ulang file Excel agar rincian terbaca.</td></tr>`;
+        return;
+      }
+      let html = rows.map((x,i) => {
+        const total = (x.mCash||0)+(x.mTf||0)+(x.rCash||0)+(x.rTf||0);
+        return `<tr>
+          <td class="center">${i+1}</td>
+          <td class="text-left">${x.tgl||''}</td>
+          <td class="text-left">${x.sales||'—'}</td>
+          <td class="text-left">${x.faktur||''}</td>
+          <td class="text-left">${x.toko||''}</td>
+          <td class="text-left">${x.alamat||''}</td>
+          <td class="text-left">${x.tglFaktur||''}</td>
+          <td class="text-left">${x.jt||''}</td>
+          <td>${fmt(x.tagihan)}</td>
+          <td>${fmt(x.mCash)}</td><td>${fmt(x.mTf)}</td>
+          <td>${fmt(x.rCash)}</td><td>${fmt(x.rTf)}</td>
+          <td class="text-left">${ketBadge(x.ket)}</td>
+          <td><strong>${fmt(total)}</strong></td>
+        </tr>`;
+      }).join('');
+      html += `<tr class="total-row">
+        <td></td><td class="text-left" colspan="7">TOTAL (${rows.length} faktur)</td>
+        <td>${fmt(sum.tag)}</td>
+        <td>${fmt(sum.mc)}</td><td>${fmt(sum.mt)}</td>
+        <td>${fmt(sum.rc)}</td><td>${fmt(sum.rt)}</td>
+        <td></td><td>${fmt(totalM+totalR)}</td>
+      </tr>`;
+      tbody.innerHTML = html;
+    }
+
     // ===================== MANAGE =====================
     function renderManage() {
       const grid = document.getElementById('monthGrid');
@@ -1222,12 +1518,68 @@
     }
 
     function extractFromSheet(ws) {
+      // Struktur Excel tetap:
+      // A kosong | B NO | C SALES | D FAKTUR | E TOKO | F ALAMAT | G TGL | H JT | I TAGIHAN | J M_CASH | K M_TF | L R_CASH | M R_TF | N KET
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
       let mc = 0, mt = 0, rc = 0, rt = 0;
       let found = false;
       const txns = [];
-      let section = 'PIUTANG'; // PIUTANG | DROPPING
+      let section = 'PIUTANG';
       let salesHint = '';
+
+      function fmtDateCell(v) {
+        if (v == null || v === '') return '';
+        if (v instanceof Date && !isNaN(v.getTime())) {
+          const dd = String(v.getDate()).padStart(2,'0');
+          const mm = String(v.getMonth()+1).padStart(2,'0');
+          return `${dd}/${mm}/${v.getFullYear()}`;
+        }
+        if (typeof v === 'number' && v > 30000 && v < 60000) {
+          const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+          const dd = String(d.getUTCDate()).padStart(2,'0');
+          const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+          return `${dd}/${mm}/${d.getUTCFullYear()}`;
+        }
+        if (typeof v === 'string') {
+          const m = v.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+          if (m) return v.trim();
+        }
+        return '';
+      }
+
+      function isFaktur(v) {
+        if (v == null) return false;
+        if (typeof v === 'number') {
+          const s = String(Math.trunc(v));
+          return s.length >= 10 && s.length <= 18;
+        }
+        const s = String(v).trim();
+        return /^0?\d{10,18}$/.test(s) || /^011\d{8,}$/.test(s);
+      }
+
+      function asFakturStr(v) {
+        if (typeof v === 'number') return String(Math.trunc(v));
+        return String(v).trim();
+      }
+
+      // ===== FIX BUG 3: numOr0 dukung format Indonesia ("1.234.567", "1.234.567,89") dan US ("1,234,567") =====
+      function numOr0(v) {
+        if (typeof v === 'number' && isFinite(v)) return v;
+        if (typeof v === 'string') {
+          let s = v.trim().replace(/[^\d,.-]/g, '');
+          if (!s) return 0;
+          // Pola Indonesia: 1.234.567 atau 1.234.567,89
+          if (/^-?\d{1,3}(\.\d{3})+$/.test(s) || /^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) {
+            s = s.replace(/\./g, '').replace(',', '.');
+          } else {
+            // Pola US atau angka polos: 1,234,567 / 1234 / 1234.56
+            s = s.replace(/,/g, '');
+          }
+          const n = Number(s);
+          return isFinite(n) ? n : 0;
+        }
+        return 0;
+      }
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] || [];
@@ -1236,16 +1588,20 @@
         if (rowStr.includes('CASH DROPPING')) { section = 'DROPPING'; salesHint = ''; continue; }
         if (rowStr.includes('PIUTANG TEMPO')) { section = 'PIUTANG'; salesHint = ''; continue; }
         if (rowStr.includes('TOTAL UANG MASUK')) {
-          for (let off = 1; off <= 3; off++) {
+          for (let off = 1; off <= 4; off++) {
             const r2 = rows[i + off] || [];
+            // Prefer fixed cols J-M (index 9-12)
+            const j = numOr0(r2[9]), k = numOr0(r2[10]), l = numOr0(r2[11]), m = numOr0(r2[12]);
+            if (j || k || l || m) {
+              mc = j; mt = k; rc = l; rt = m; found = true; break;
+            }
             const nums = [];
-            for (let j = 0; j < r2.length; j++) {
-              if (typeof r2[j] === 'number') nums.push({ col: j, val: r2[j] });
+            for (let c = 0; c < r2.length; c++) {
+              if (typeof r2[c] === 'number') nums.push({ col: c, val: r2[c] });
             }
             if (nums.length >= 2) {
-              let selected = nums.slice(0, 4);
               const near = nums.filter(n => n.col >= 8 && n.col <= 14);
-              if (near.length >= 2) selected = near.slice(0, 4);
+              const selected = (near.length >= 2 ? near : nums).slice(0, 4);
               mc = selected[0]?.val || 0;
               mt = selected[1]?.val || 0;
               rc = selected[2]?.val || 0;
@@ -1257,88 +1613,94 @@
           continue;
         }
 
-        // Skip pure header / total rows for txn parse
-        if (rowStr.includes('TOTAL') && !rowStr.match(/\b\d{5,}\b/)) continue;
+        if (rowStr.includes('TOTAL') && !rowStr.match(/\d{10,}/)) continue;
         if (rowStr.includes('NO FAKTUR') || rowStr.includes('NAMA TOKO')) continue;
-        if (rowStr.includes('PEMBAYARAN') || rowStr.includes('MINYAK')) continue;
-        if (rowStr.includes('MENGETAHUI') || rowStr.includes('UANG MASUK CASH')) continue;
+        if (rowStr.includes('PEMBAYARAN') || rowStr.includes('MENGETAHUI')) continue;
+        if (rowStr.includes('UANG MASUK CASH') || rowStr.includes('UANG MASUK DARI')) continue;
+        if (rowStr.includes('TRANSFER/BG') && rowStr.includes('CASH')) continue;
 
-        // Detect sales name in column (often col index 2 = C in Excel when B is NO)
-        // Row pattern from Excel: often [empty, NO, SALES, FAKTUR, TOKO, ALAMAT, TGL, JT, TAGIHAN, M_CASH, M_TF, R_CASH, R_TF, KET]
-        // or compacted. We'll scan for faktur-like number.
+        // Fixed-column path (most reliable for this Excel format)
+        // D=faktur (idx 3), E=toko(4), F=alamat(5), G=tgl(6), H=jt(7), I=tagihan(8), J-M payments(9-12), N=ket(13)
         let faktur = null, fakturCol = -1;
-        for (let j = 0; j < row.length; j++) {
-          const v = row[j];
-          if (v == null) continue;
-          const s = String(v).trim();
-          // No faktur typically long numeric string starting with 0
-          if (/^0?\d{12,}$/.test(s) || /^011\d{12,}$/.test(s)) {
-            faktur = s; fakturCol = j; break;
+        if (isFaktur(row[3])) { faktur = asFakturStr(row[3]); fakturCol = 3; }
+        else {
+          for (let j = 0; j < row.length; j++) {
+            if (isFaktur(row[j])) { faktur = asFakturStr(row[j]); fakturCol = j; break; }
           }
         }
+
         if (!faktur) {
-          // Maybe sales name only on first row of group
           for (let j = 0; j < Math.min(row.length, 5); j++) {
             const v = row[j];
-            if (typeof v === 'string') {
-              const up = v.toUpperCase().trim();
-              if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI','PAK ITO'].some(x => up.includes(x)) ||
-                  up.includes('(HAFID)') || up.includes('(JOSSY)') || up.includes('(RAJU)')) {
-                salesHint = v.toString().trim();
+            if (typeof v === 'string' && v.trim()) {
+              const up = v.toUpperCase();
+              if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI','ANAM','PAK ITO'].some(x => up.includes(x)) || up.includes('(')) {
+                salesHint = v.trim();
               }
             }
           }
           continue;
         }
 
-        // Build txn from nearby columns
-        // Expect: ... faktur, toko, alamat, tgl, jt, tagihan, mCash, mTf, rCash, rTf, ket
-        const after = fakturCol + 1;
-        const toko = row[after] != null ? String(row[after]).trim() : '';
-        const alamat = row[after+1] != null ? String(row[after+1]).trim() : '';
-        // numbers after
-        const nums = [];
-        let ket = '';
-        for (let j = after + 2; j < row.length; j++) {
-          const v = row[j];
-          if (typeof v === 'number') nums.push(v);
-          else if (v != null && String(v).trim() && typeof v !== 'object') {
-            const s = String(v).trim().toUpperCase();
-            if (s.includes('LUNAS') || s.includes('TITIP') || s.includes('TF') || s.includes('BG')) ket = String(v).trim();
+        let toko = '', alamat = '', tglFaktur = '', jt = '', ket = '';
+        let tagihan = 0, mCash = 0, mTf = 0, rCash = 0, rTf = 0;
+
+        if (fakturCol === 3) {
+          toko = row[4] != null ? String(row[4]).trim() : '';
+          alamat = row[5] != null ? String(row[5]).trim() : '';
+          tglFaktur = fmtDateCell(row[6]);
+          jt = fmtDateCell(row[7]);
+          tagihan = numOr0(row[8]);
+          mCash = numOr0(row[9]);
+          mTf = numOr0(row[10]);
+          rCash = numOr0(row[11]);
+          rTf = numOr0(row[12]);
+          if (row[13] != null && String(row[13]).trim()) ket = String(row[13]).trim();
+        } else {
+          const after = fakturCol + 1;
+          toko = row[after] != null ? String(row[after]).trim() : '';
+          alamat = row[after+1] != null ? String(row[after+1]).trim() : '';
+          const dateStrs = [];
+          const nums = [];
+          for (let j = after + 2; j < row.length; j++) {
+            const v = row[j];
+            if (v == null || v === '') continue;
+            const ds = fmtDateCell(v);
+            if (ds) { dateStrs.push(ds); continue; }
+            if (typeof v === 'number') nums.push(v);
+            else if (String(v).trim() && typeof v !== 'object') {
+              const s = String(v).trim().toUpperCase();
+              if (s.includes('LUNAS') || s.includes('TITIP') || s.includes('TF') || s.includes('BG')) ket = String(v).trim();
+            }
+          }
+          tglFaktur = dateStrs[0] || '';
+          jt = dateStrs[1] || '';
+          if (nums.length >= 5) {
+            tagihan = nums[0]; mCash = nums[1]||0; mTf = nums[2]||0; rCash = nums[3]||0; rTf = nums[4]||0;
+          } else if (nums.length === 4) {
+            mCash = nums[0]; mTf = nums[1]; rCash = nums[2]; rTf = nums[3];
+            tagihan = mCash + mTf + rCash + rTf;
+          } else if (nums.length === 3) {
+            tagihan = nums[0]; mCash = nums[1]; rCash = nums[2];
+          } else if (nums.length === 2) {
+            tagihan = nums[0]; mCash = nums[1];
+          } else if (nums.length === 1) {
+            mCash = nums[0]; tagihan = nums[0];
           }
         }
-        // Also check sales in columns before faktur
+
         let sales = salesHint;
         for (let j = 0; j < fakturCol; j++) {
           const v = row[j];
           if (typeof v === 'string' && v.trim()) {
             const up = v.toUpperCase();
-            if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI'].some(x => up.includes(x)) || up.includes('(')) {
+            if (['RAJU','JOSSY','HAFID','ZEIN','ALIM','INDI','ANAM','PAK ITO'].some(x => up.includes(x)) || up.includes('(')) {
               sales = v.trim(); salesHint = sales;
             }
           }
         }
 
-        // Payment columns: typically last 4 numbers before optional total, or: tagihan + 4 payments
-        // Heuristic: if >= 5 numbers, first is tagihan, next up to 4 are payments
-        let tagihan = 0, mCash = 0, mTf = 0, rCash = 0, rTf = 0;
-        if (nums.length >= 5) {
-          tagihan = nums[0];
-          mCash = nums[1] || 0; mTf = nums[2] || 0;
-          rCash = nums[3] || 0; rTf = nums[4] || 0;
-        } else if (nums.length === 4) {
-          // could be payments only or tagihan+3
-          mCash = nums[0]; mTf = nums[1]; rCash = nums[2]; rTf = nums[3];
-          tagihan = mCash + mTf + rCash + rTf;
-        } else if (nums.length === 3) {
-          tagihan = nums[0]; mCash = nums[1]; rCash = nums[2];
-        } else if (nums.length === 2) {
-          tagihan = nums[0]; mCash = nums[1];
-        } else if (nums.length === 1) {
-          mCash = nums[0]; tagihan = nums[0];
-        }
-
-        if (!toko && !mCash && !mTf && !rCash && !rTf) continue;
+        if (!toko && !mCash && !mTf && !rCash && !rTf && !tagihan) continue;
 
         txns.push({
           section,
@@ -1346,6 +1708,8 @@
           faktur,
           toko,
           alamat,
+          tglFaktur,
+          jt,
           tagihan,
           mCash, mTf, rCash, rTf,
           ket
@@ -1353,7 +1717,6 @@
       }
 
       if (!found && mc === 0 && rc === 0) {
-        // derive from txns if totals missing
         if (txns.length) {
           mc = txns.reduce((a,x)=>a+(x.mCash||0),0);
           mt = txns.reduce((a,x)=>a+(x.mTf||0),0);
@@ -1427,7 +1790,8 @@
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result);
-          if (typeof data !== 'object') throw new Error('Format tidak valid');
+          // ===== FIX BUG 2: validasi sebelum replace store =====
+          if (!isValidStore(data)) throw new Error('Format backup tidak valid (harus object dengan field days array)');
           store = data;
           saveStore();
           toast('Restore berhasil');
